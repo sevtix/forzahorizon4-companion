@@ -10,25 +10,47 @@ using UnityEngine.UI;
 
 public class UDPReceive : MonoBehaviour
 {
+    [Header("Panels")]
+
+    public GameObject helpPanel;
     public GameObject noConnectionPanel;
 
+    [Space]
+    [Header("Image views")]
+
     public Image rpmNeedle;
+    public Transform g_blip;
+
+    [Space]
+    [Header("Dials")]
 
     public Image limiterView;
     public Image dialView;
+    public Image torqueView;
+    public Image powerView;
+
+    [Space]
+    [Header("Text views")]
 
     public Text speedView;
     public Text gearView;
     public Text ipView;
 
-    public Text torqueView;
-    public Text powerView;
+    public Text x_acc_view;
+    public Text z_acc_view;
 
+    public Text torqueView_percent;
+    public Text powerView_percent;
+
+    [Space]
+    [Header("Settings")]
     public InputField portInput;
 
-    bool isGameMode = false;
-
     int port = 4096;
+
+    float reference_torque = 0;
+    float reference_power = 0;
+
 
     UdpClient socket;
 
@@ -46,7 +68,14 @@ public class UDPReceive : MonoBehaviour
     {
         Application.targetFrameRate = 60;
 
-        if(PlayerPrefs.HasKey("udp.port"))
+        if (!PlayerPrefs.HasKey("app.run"))
+        {
+            helpPanel.SetActive(true);
+            PlayerPrefs.SetInt("app.run", 1);
+            PlayerPrefs.Save();
+        }
+
+        if (PlayerPrefs.HasKey("udp.port"))
         {
             port = PlayerPrefs.GetInt("udp.port");
         }
@@ -89,6 +118,13 @@ public class UDPReceive : MonoBehaviour
             noConnectionPanel.SetActive(false);
         }
 
+          /*float x = floatConversion(byteCollection(244, 248, message));
+            float y = floatConversion(byteCollection(248, 252, message));
+            float z = floatConversion(byteCollection(252, 256, message));
+            */
+
+        // DATA INPUT
+
         float rpm = floatConversion(byteCollection(16, 20, message));
         float speed = (floatConversion(byteCollection(256, 260, message)) * 3.6f);
 
@@ -100,49 +136,68 @@ public class UDPReceive : MonoBehaviour
 
         byte gear = message[319];
 
-        int torque = Mathf.RoundToInt(torque_fl);
-        int power = Mathf.RoundToInt(power_fl);
-
-        if(power < 0)
-        {
-            power = 0;
-        }
-
-        if (torque < 0)
-        {
-            torque = 0;
-        }
-
         int speed_int = Mathf.RoundToInt(speed);
 
-        rpmNeedle.transform.eulerAngles = new Vector3(0, 0, ((360 / max_rpm_dial) * rpm) * -1.0f);
-
-        limiterView.fillAmount = ((max_rpm_dial / max_rpm) - 1.0f) * 2.5f;
-        dialView.fillAmount = 1.0f - (((max_rpm_dial / max_rpm) - 1.0f) * 2.5f);
-
+        // GEAR
 
         string gear_str = "";
-
-        if (gear > 0)
-        {
+        if (gear > 0){
             gear_str = gear.ToString();
-        } else
-        {
+        }else{
             gear_str = "R";
         }
 
+        // G SENSOR
+
+        float side_acceleration = floatConversion(byteCollection(32, 36, message));
+        float forward_acceleration = floatConversion(byteCollection(28, 32, message));
+        x_acc_view.text = side_acceleration + "";
+        z_acc_view.text = forward_acceleration + "";
+        g_blip.position = new Vector3(side_acceleration, forward_acceleration, 0);
+
+        // CHECK IF < 0
+
+        if (torque_fl < 0)
+        {
+            torque_fl = 0;
+        }
+
+        if (power_fl < 0)
+        {
+            power_fl = 0;
+        }
+
+        // CHECK IF REFERENCE
+
+        if (torque_fl > reference_torque)
+        {
+            reference_torque = torque_fl;
+        }
+
+        if (power_fl > reference_power)
+        {
+            reference_power = power_fl;
+        }
+
+        // APPLY
+
+        torqueView.fillAmount = torque_fl / reference_torque;
+        powerView.fillAmount = power_fl / reference_power;
+
+        torqueView_percent.text = Mathf.RoundToInt((torque_fl / reference_torque) * 100.0f) +"";
+        powerView_percent.text = Mathf.RoundToInt((power_fl / reference_power) * 100.0f) + "";
+
         gearView.text = gear_str;
         speedView.text = speed_int.ToString();
-        torqueView.text = torque + " Nm";
-        powerView.text = power + " kW";
 
-        /*
-         
-        speed = 512, 520
-        max_rpm = 16, 24
-        rpm = 32, 40
-         
-         */
+        // NEEDLE
+
+        rpmNeedle.transform.eulerAngles = new Vector3(0, 0, ((360 / max_rpm_dial) * rpm) * -1.0f);
+
+        // DIAL & LIMITER
+
+        limiterView.fillAmount = ((max_rpm_dial / max_rpm) - 1.0f) * 2.5f;
+        dialView.fillAmount = 1.0f - (((max_rpm_dial / max_rpm) - 1.0f) * 2.5f);
     }
 
     public void changePort()
@@ -153,6 +208,7 @@ public class UDPReceive : MonoBehaviour
             {
                 port = Int32.Parse(portInput.text);
                 PlayerPrefs.SetInt("udp.port", port);
+                PlayerPrefs.Save();
                 Debug.Log("changed port to: " + port);
                 stopUDPSocket();
                 startUDPSocket();
@@ -171,6 +227,12 @@ public class UDPReceive : MonoBehaviour
     void stopUDPSocket()
     {
         socket.Close();
+    }
+
+    public void clearReferences()
+    {
+        reference_power = 0;
+        reference_torque = 0;
     }
 
     byte[] byteCollection(int from, int to, byte[] source)

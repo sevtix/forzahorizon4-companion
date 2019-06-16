@@ -7,6 +7,4 @@ Torque<br>
 Power<br>
 Speed<br>
 RPM
-
-## to do list
-port custom acceleration test (0-100, 0-200, 100-200) from Java to C#
+Drag

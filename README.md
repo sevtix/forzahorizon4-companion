@@ -6,5 +6,5 @@ available in play store: https://play.google.com/store/apps/details?id=dev.sevti
 Torque<br>
 Power<br>
 Speed<br>
-RPM
-Drag
+RPM<br>
+Drag<br>
